@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% load cart_tags %}
+
+{% block content %}
+<h2>🛒 Ваша корзина</h2>
+
+{% if flowers %}
+    <ul class="list-group">
+        {% for item in flowers %}
+            <li class="list-group-item" id="cart-item-{{ item.flower.id }}">
+                <img src="{{ item.flower.image.url }}" alt="{{ item.flower.name }}" class="flower-preview" style="max-width: 150px; height: auto;">
+                <strong>{{ item.flower.name }}</strong>
+                <br>💰 <span id="subtotal-{{ item.flower.id }}">{{ item.subtotal }}</span> ₽
+                <br>
+                <button onclick="updateCart({{ item.flower.id }}, -1)">➖</button>
+                <span id="cart-qty-{{ item.flower.id }}">{{ item.quantity }}</span>
+                <button onclick="updateCart({{ item.flower.id }}, 1)">➕</button>
+                <button onclick="removeFromCart({{ item.flower.id }})" class="btn btn-danger btn-sm">🗑 Убрать</button>
+            </li>
+        {% endfor %}
+    </ul>
+    <h3>💵 Итог: <span id="total-price">{{ total_price }}</span> ₽</h3>
+    
+    <!-- Кнопка "Оформить заказ" без проверки авторизации -->
+    <a href="{% url 'checkout' %}" class="btn btn-success">✅ Оформить заказ</a>
+    
+    <button onclick="clearCart()" class="btn btn-warning">🧹 Очистить корзину</button>
+{% else %}
+    <p>😕 Ваша корзина пуста.</p>
+{% endif %}
+
+<script>
+function updateCart(flowerId, change) {
+    let qtySpan = document.getElementById(`cart-qty-${flowerId}`);
+    let subtotalSpan = document.getElementById(`subtotal-${flowerId}`);
+    let totalPriceSpan = document.getElementById("total-price");
+    let cartItem = document.getElementById(`cart-item-${flowerId}`);
+
+    let newQty = parseInt(qtySpan.textContent) + change;
+
+    fetch(`/cart/update/${flowerId}/${newQty}/`, { 
+        method: "POST", 
+        headers: {"X-CSRFToken": "{{ csrf_token }}"}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (newQty > 0) {
+                qtySpan.textContent = newQty;
+                subtotalSpan.textContent = data.subtotal;
+                totalPriceSpan.textContent = data.total_price;
+            } else {
+                if (cartItem) {
+                    cartItem.remove();  // ✅ Удаляем элемент без перезагрузки
+                }
+                totalPriceSpan.textContent = data.total_price;
+
+                // Если корзина полностью пуста, обновляем страницу
+                if (data.total_price === 0) {
+                    location.reload();
+                }
+            }
+        }
+    })
+    .catch(error => console.error("Ошибка обновления корзины:", error));
+}
+
+function removeFromCart(flowerId) {
+    fetch(`/cart/remove/${flowerId}/`, { 
+        method: "POST", 
+        headers: {"X-CSRFToken": "{{ csrf_token }}"}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();  // Обновляем страницу после удаления
+        }
+    });
+}
+
+function clearCart() {
+    fetch(`/cart/clear/`, { 
+        method: "POST", 
+        headers: {"X-CSRFToken": "{{ csrf_token }}"}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();  // Обновляем страницу после очистки
+        }
+    });
+}
+</script>
+
+{% endblock %}

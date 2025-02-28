@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <a href="{% url 'order_list' %}" class="btn btn-secondary">📦 История заказов</a>
+
+    <h2>Редактирование профиля</h2>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-success">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+
+        <label>ФИО:</label>
+        <input type="text" name="full_name" class="form-control mb-3" value="{{ profile.full_name }}" required>
+
+        <label>Номер телефона:</label>
+        <input type="text" name="phone" class="form-control mb-3" value="{{ profile.phone }}" required>
+
+        <label>Email:</label>
+        <input type="email" name="email" class="form-control mb-3" value="{{ user.email }}">
+
+        <label>Адрес доставки:</label>
+        <textarea name="address" class="form-control mb-3" required>{{ profile.address }}</textarea>
+
+        <label>Telegram ID (опционально):</label>
+        <input type="text" name="telegram_id" class="form-control mb-3" value="{{ profile.telegram_id }}">
+
+        <button type="submit" class="btn btn-success">Сохранить</button>
+    </form>
+
+    <p class="mt-3">
+        ❓ Чтобы получать уведомления о состоянии заказов в Telegram, привяжите свой Id к профилю. Для этого отправьте команду <b>/start</b> нашему <a href="https://t.me/flowershop_delivery_bot" target="_blank">боту</a> и нажмите кнопку <b>Отправить номер</b>.
+    </p>
+</div>
+{% endblock %}
