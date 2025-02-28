@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>📜 История заказов</h2>
+
+{% if orders %}
+    <ul class="list-group">
+        {% for order in orders %}
+        <li class="list-group-item">
+            <strong>Заказ #{{ order.id }}</strong> — {{ order.get_status_display }} ({{ order.created_at|date:"d.m.Y H:i" }})
+            <br>📍 Адрес доставки: {{ order.address }}
+            <br>💐 <em>
+                {% for item in order.items.all %}
+                    {{ item.flower.name }} x {{ item.quantity }} ({{ item.price }} ₽ за шт.) = {{ item.subtotal }} ₽
+                    {% if not forloop.last %}<br>{% endif %}
+                {% endfor %}
+            </em>
+            <br>💵 Общая стоимость: {{ order.total_price }} ₽
+            <br>
+            <a href="{% url 'repeat_order' order.id %}" class="btn btn-primary btn-sm">🔄 Повторить заказ</a>
+        </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>😕 У вас пока нет заказов.</p>
+{% endif %}
+
+{% endblock %}

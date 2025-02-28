@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% load cart_tags %}
+
+{% block content %}
+<div class="container">
+    <h2>Оформление заказа</h2>
+    <p>Пожалуйста, проверьте ваш заказ перед подтверждением.</p>
+
+    <!-- Отображение содержимого корзины -->
+    {% if flowers %}
+        <ul class="list-group">
+            {% for item in flowers %}
+                <li class="list-group-item">
+                    <img src="{{ item.flower.image.url }}" alt="{{ item.flower.name }}" class="flower-preview" style="max-width: 150px; height: auto;">
+                    <strong>{{ item.flower.name }}</strong>
+                    <br>💰 Цена за единицу: {{ item.flower.price }} ₽
+                    <br>📦 Количество: {{ item.quantity }}
+                    <br>💸 Итого: {{ item.subtotal }} ₽
+                </li>
+            {% endfor %}
+        </ul>
+        <h3>💵 Общая сумма: {{ total_price }} ₽</h3>
+    {% else %}
+        <p>😕 Ваша корзина пуста.</p>
+    {% endif %}
+
+    <!-- Форма для ввода адреса доставки -->
+    <form method="post" class="mt-3">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="address">Адрес доставки:</label>
+            <input type="text" 
+                   class="form-control" 
+                   id="address" 
+                   name="address" 
+                   value="{{ request.user.userprofile.address }}" 
+                   required>
+        </div>
+
+        <!-- Кнопка для подтверждения заказа -->
+        <button type="submit" class="btn btn-primary mt-3">✅ Подтвердить заказ</button>
+    </form>
+
+    <!-- Кнопка для возврата в корзину -->
+    <a href="{% url 'view_cart' %}" class="btn btn-secondary mt-2">🛒 Вернуться в корзину</a>
+</div>
+{% endblock %}

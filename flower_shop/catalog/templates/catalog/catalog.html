@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% load cart_tags %}
+
+{% block content %}
+<h2>🌸 Каталог цветов</h2>
+
+<style>
+.flower-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Адаптивные колонки */
+    gap: 20px; /* Отступы между элементами */
+    justify-content: center;
+}
+
+.flower-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    background: #fff;
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.flower-preview {
+    max-width: 150px;
+    height: auto;
+    border-radius: 5px;
+}
+</style>
+
+<div class="flower-grid">
+    {% for flower in flowers %}
+        <div class="flower-card">
+            <img src="{{ flower.image.url }}" alt="{{ flower.name }}" class="flower-preview">
+            <h3>{{ flower.name }}</h3>
+            <p>Цена: {{ flower.price }} ₽</p>
+
+            <div id="cart-controls-{{ flower.id }}">
+                {% if request.session.cart|get_item:flower.id %}
+                    <div class="cart-controls">
+                        <button onclick="updateCart({{ flower.id }}, -1)">➖</button>
+                        <span id="cart-qty-{{ flower.id }}">{{ request.session.cart|get_item:flower.id }}</span>
+                        <button onclick="updateCart({{ flower.id }}, 1)">➕</button>
+                    </div>
+                {% else %}
+                    <button onclick="addToCart({{ flower.id }})" class="btn btn-primary">🛒 В корзину</button>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<a href="{% url 'view_cart' %}" class="btn btn-success">🛒 Перейти в корзину</a>
+
+<script>
+function addToCart(flowerId) {
+    fetch(`/cart/add/${flowerId}/`, {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": getCSRFToken(),
+            "Content-Type": "application/json"
+        }
+    })
+    .then(response => response.json())
+.then(data => {
+    console.log("Ответ сервера:", data); // Отладочное сообщение
+    if (data.success) {
+        console.log("Обновление DOM для flowerId:", flowerId); // Отладочное сообщение
+        let cartControls = document.getElementById(`cart-controls-${flowerId}`);
+        cartControls.innerHTML = `
+            <div class="cart-controls">
+                        <button onclick="window.location.href='/cart/'" class="btn btn-success">🛒 В корзине</button>
+                <button onclick="updateCart(${flowerId}, -1)">➖</button>
+                <span id="cart-qty-${flowerId}">${data.quantity}</span>
+                <button onclick="updateCart(${flowerId}, 1)">➕</button>
+            </div>
+        `;
+    }
+})
+    .catch(error => console.error("Ошибка добавления в корзину:", error));
+}
+
+function updateCart(flowerId, change) {
+    let qtySpan = document.getElementById(`cart-qty-${flowerId}`);
+    let newQty = parseInt(qtySpan.textContent) + change;
+
+    fetch(`/cart/update/${flowerId}/${newQty}/`, {
+        method: "POST",
+        headers: {
+            "X-CSRFToken": getCSRFToken(),
+            "Content-Type": "application/json"
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (newQty > 0) {
+                // Обновляем количество и отображаем кнопку "В корзину"
+                qtySpan.textContent = newQty;
+                let cartControls = document.getElementById(`cart-controls-${flowerId}`);
+                cartControls.innerHTML = `
+                    <div class="cart-controls">
+                        <button onclick="window.location.href='/cart/'" class="btn btn-success">🛒 В корзине</button>
+                        <button onclick="updateCart(${flowerId}, -1)">➖</button>
+                        <span id="cart-qty-${flowerId}">${newQty}</span>
+                        <button onclick="updateCart(${flowerId}, 1)">➕</button>
+                    </div>
+                `;
+            } else {
+                // Если количество достигло нуля, заменяем на кнопку "В корзину"
+                document.getElementById(`cart-controls-${flowerId}`).innerHTML = `
+                    <button onclick="addToCart(${flowerId})" class="btn btn-primary">🛒 В корзину</button>
+                `;
+            }
+        }
+    })
+    .catch(error => console.error("Ошибка обновления корзины:", error));
+}
+
+// Функция для получения CSRF-токена
+function getCSRFToken() {
+    let csrfTokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+    return csrfTokenElement ? csrfTokenElement.value : getCookie("csrftoken");
+}
+
+// Функция для получения куки
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        let cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            let cookie = cookies[i].trim();
+            if (cookie.startsWith(name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+
+{% endblock %}
