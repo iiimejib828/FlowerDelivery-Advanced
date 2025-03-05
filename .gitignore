@@ -169,4 +169,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-bot/config.py
+flower_shop/bot/config.py
+flower_shop/db.sqlite3
