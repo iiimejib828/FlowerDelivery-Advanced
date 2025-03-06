@@ -1,9 +1,12 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block content %}
 <div class="container text-center mt-5">
     <h1>Добро пожаловать в Цветочную Лавку</h1>
     <p class="lead">Мы доставляем свежие цветы с любовью!</p>
+
+    <img src="{% static 'images/Flowershop.webp' %}" alt="Цветочная лавка Вашей мечты" class="img-fluid home-image mx-auto d-block" style="max-width: 800px;">
 
     <div class="mt-4">
         <a href="{% url 'flower_list' %}" class="btn btn-primary btn-lg">Перейти в каталог</a>
@@ -17,4 +20,19 @@
         {% endif %}
     </div>
 </div>
+
+<style>
+    .home-image {
+        max-height: 80vh; /* Ограничиваем высоту до 80% видимой области экрана */
+        width: auto; /* Позволяем ширине адаптироваться */
+        object-fit: contain; /* Сохраняем пропорции без обрезки */
+    }
+
+    @media (max-width: 576px) {
+        .home-image {
+            max-width: 100%; /* На узких экранах ширина не превышает контейнер */
+            max-height: 50vh; /* Уменьшаем высоту для мобильных устройств */
+        }
+    }
+</style>
 {% endblock %}

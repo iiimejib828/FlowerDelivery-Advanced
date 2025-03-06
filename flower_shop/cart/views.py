@@ -8,6 +8,9 @@ from bot.utils import send_message
 from bot.config import ADMIN_IDS
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+from django.utils import timezone
+from .models import WorkingHours
+
 
 @csrf_exempt
 def add_to_cart(request, flower_id):
@@ -98,27 +101,64 @@ def clear_cart(request):
 
     return JsonResponse({"success": False})
 
+def is_working_hours():
+    """Проверяет, находится ли текущее время в рамках рабочего времени."""
+    now = timezone.now()
+    # Преобразуем в местное время согласно TIME_ZONE
+    local_now = timezone.localtime(now)
+    # Получаем текущий день недели (например, "mon")
+    current_day = local_now.strftime("%a").lower()
+    # Получаем текущее местное время
+    current_time = local_now.time()
+    try:
+        working_hours = WorkingHours.objects.get(day=current_day)
+        if working_hours.is_working and working_hours.opening_time <= current_time <= working_hours.closing_time:
+            return True
+    except WorkingHours.DoesNotExist:
+        pass
+
+    return False
+
+
 @login_required
 def checkout(request):
     """Оформление заказа"""
     profile, created = UserProfile.objects.get_or_create(user=request.user)
 
-    if not profile.phone:
-        messages.warning(request, "Пожалуйста, заполните ваш профиль (номер телефона) перед оформлением заказа.")
-        return redirect("profile")
-
     cart = request.session.get("cart", {})
-    if not cart:
-        messages.warning(request, "Ваша корзина пуста.")
-        return redirect("flower_list")
-
+    
     if request.method == "POST":
+        # Проверка рабочего времени только при оформлении заказа
+        if not is_working_hours():
+            working_hours = WorkingHours.objects.filter(is_working=True)
+            schedule = "\n".join(
+                f"{wh.get_day_display()}: {wh.opening_time} - {wh.closing_time}"
+                for wh in working_hours
+            )
+            return JsonResponse({
+                "success": False,
+                "message": f"К сожалению, мы можем принять заказ только в рабочее время.\nРасписание работы:\n\n{schedule}\n\nПожалуйста, попробуйте позже."
+            })
+
+        if not profile.phone:
+            return JsonResponse({
+                "success": False,
+                "message": "Пожалуйста, заполните ваш профиль (номер телефона) перед оформлением заказа."
+            })
+
+        if not cart:
+            return JsonResponse({
+                "success": False,
+                "message": "Ваша корзина пуста."
+            })
+
         address = request.POST.get("address", "").strip()
         if not address:
-            messages.error(request, "Пожалуйста, укажите адрес доставки.")
-            return redirect("checkout")
+            return JsonResponse({
+                "success": False,
+                "message": "Пожалуйста, укажите адрес доставки."
+            })
 
-        # Создаем заказ и сразу заполняем его
         order = Order(user=profile, status="awaiting_payment", address=address)
         total_price = 0
         items = []
@@ -135,17 +175,16 @@ def checkout(request):
             ))
         
         order.total_price = total_price
-        # Сохраняем заказ и элементы одним вызовом
         order.save()
         OrderItem.objects.bulk_create(items)
 
-        # Очищаем корзину
         request.session["cart"] = {}
-        messages.success(request, "Ваш заказ успешно оформлен!")
+        return JsonResponse({
+            "success": True,
+            "redirect_url": "/orders/"
+        })
 
-        # Уведомление будет отправлено через сигнал post_save
-        return redirect("order_list")
-
+    # Обработка GET-запроса для отображения формы (всегда рендерим страницу)
     flowers = []
     total_price = 0
     for flower_id, quantity in cart.items():

@@ -25,7 +25,7 @@
     {% endif %}
 
     <!-- Форма для ввода адреса доставки -->
-    <form method="post" class="mt-3">
+    <form id="checkout-form" method="post" class="mt-3">
         {% csrf_token %}
         <div class="form-group">
             <label for="address">Адрес доставки:</label>
@@ -43,5 +43,39 @@
 
     <!-- Кнопка для возврата в корзину -->
     <a href="{% url 'view_cart' %}" class="btn btn-secondary mt-2">🛒 Вернуться в корзину</a>
+
+    <!-- Блок для отображения сообщений об ошибках -->
+    <div id="error-message" class="alert alert-danger mt-3" style="display: none; white-space: pre-line;"></div>
+
+    <script>
+    document.getElementById("checkout-form").addEventListener("submit", function(event) {
+        event.preventDefault();
+        const errorMessageDiv = document.getElementById("error-message");
+        errorMessageDiv.style.display = "none";  // Скрываем предыдущее сообщение
+
+        fetch('/cart/checkout/', {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": "{{ csrf_token }}",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: new URLSearchParams(new FormData(this)).toString()
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = data.redirect_url;  // Перенаправление на список заказов
+            } else {
+                errorMessageDiv.textContent = data.message;
+                errorMessageDiv.style.display = "block";  // Показываем сообщение об ошибке
+            }
+        })
+        .catch(error => {
+            console.error("Ошибка при оформлении заказа:", error);
+            errorMessageDiv.textContent = "Произошла ошибка при оформлении заказа.";
+            errorMessageDiv.style.display = "block";
+        });
+    });
+    </script>
 </div>
 {% endblock %}

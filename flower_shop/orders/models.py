@@ -79,10 +79,8 @@ class Order(models.Model):
             button = InlineKeyboardButton(text="Отменить заказ", callback_data=callback_data)
             keyboard = [[button]]
             reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
-            print(f"Sending creation message with button: {message} | Reply Markup: {reply_markup}")
         else:
             reply_markup = None
-            print(f"Sending creation message without button: {message}")
 
         send_message(self.user.telegram_id, message, reply_markup=reply_markup)
 
@@ -120,12 +118,10 @@ class OrderAdmin(admin.ModelAdmin):
 @receiver(post_save, sender=Order)
 def send_status_update(sender, instance, created, **kwargs):
     """Отправка уведомления пользователю при создании или изменении статуса заказа."""
-    print(f"🔹 Обновление заказа #{instance.id}, статус: {instance.status}, created: {created}")
 
     if not instance.user.telegram_id:
         if not instance.user.notified_to_join_bot:
             message = f"Пожалуйста, свяжитесь с ботом по номеру {instance.user.phone} и отправьте команду /start."
-            print(message)
             instance.user.notified_to_join_bot = True
             instance.user.save()
             NotificationLog.objects.create(user=instance.user, message=message)
@@ -143,6 +139,5 @@ def send_status_update(sender, instance, created, **kwargs):
             )
         else:
             message = f"Статус вашего заказа #{instance.id} изменён на: {instance.get_status_display()}"
-        print(f"Sending status update: {message}")
         send_message(instance.user.telegram_id, message)
         NotificationLog.objects.create(user=instance.user, message=message)

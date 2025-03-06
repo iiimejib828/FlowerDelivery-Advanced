@@ -8,7 +8,7 @@ from orders.models import Order  # Убрали ненужный импорт Us
 from aiogram.client.default import DefaultBotProperties
 from bot.config import TOKEN, ADMIN_IDS
 from aiogram.types import CallbackQuery
-
+from cart.views import is_working_hours
 from users.models import UserProfile
 
 # Инициализация бота и диспетчера
@@ -123,14 +123,36 @@ async def admin_unlink_user(message: types.Message):
 async def send_payment_reminders():
     """Периодически проверяет заказы и отправляет напоминания об оплате"""
     while True:
-        await asyncio.sleep(3600)  # Проверяем раз в час
-        overdue_orders = await sync_to_async(list)(Order.objects.filter(status="awaiting_payment"))
+        await asyncio.sleep(10800)  # Проверяем раз в три часа
+        if not await sync_to_async(is_working_hours)():
+            continue
+        overdue_orders = await sync_to_async(list)(Order.objects.filter(status="awaiting_payment").select_related('user'))
         for order in overdue_orders:
-            if order.is_payment_overdue() and order.user.telegram_id:
-                await bot.send_message(
-                    order.user.telegram_id,
-                    f"⚠️ Ваш заказ #{order.id} ожидает оплаты! Пожалуйста, оплатите его."
-                )
+            is_overdue = await sync_to_async(order.is_payment_overdue)()
+            if not hasattr(order, 'user') or not order.user:
+                for admin_id in ADMIN_IDS:
+                    await bot.send_message(
+                        admin_id,
+                        f"⚠️ Заказ #{order.id} пропущен: отсутствует пользователь"
+                    )
+                    print(f"Заказ #{order.id} пропущен: отсутствует пользователь, уведомлен админ")
+                continue
+            
+            if is_overdue:
+                if order.user.telegram_id:
+                    await bot.send_message(
+                        order.user.telegram_id,
+                        f"⚠️ Ваш заказ #{order.id} ожидает оплаты! Пожалуйста, оплатите его."
+                    )
+                    print(f"Уведомление отправлено пользователю для заказа #{order.id}")
+                else:
+                    # Уведомляем админа, если telegram_id отсутствует
+                    for admin_id in ADMIN_IDS:
+                        await bot.send_message(
+                            admin_id,
+                            f"⚠️ Заказ #{order.id} просрочен, но у пользователя {order.user.full_name} (телефон: {order.user.phone}) нет telegram_id."
+                        )
+                    print(f"Заказ #{order.id} пропущен: отсутствует telegram_id, уведомлен админ")
 
 @dp.callback_query(lambda callback: callback.data.startswith("cancel_order_"))
 async def cancel_order(callback: CallbackQuery):
@@ -150,7 +172,11 @@ async def cancel_order(callback: CallbackQuery):
         )
         await callback.answer()
     else:
-        await callback.answer("❌ Невозможно отменить заказ: он уже отправлен или доставлен.")
+        await callback.message.edit_text(
+            f"❌ Заказ #{order_id}:\n\n{await sync_to_async(order.get_order_summary)()}",
+            reply_markup=None  # Убираем кнопки
+        )
+        await callback.answer("❌ Невозможно отменить заказ: он уже отправлен, доставлен или отменён.")
 
 @dp.callback_query(lambda callback: callback.data.startswith("confirm_cancel_"))
 async def confirm_cancel_order(callback: CallbackQuery):
