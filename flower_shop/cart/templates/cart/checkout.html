@@ -6,6 +6,9 @@
     <h2>Оформление заказа</h2>
     <p>Пожалуйста, проверьте ваш заказ перед подтверждением.</p>
 
+    <!-- Блок для отображения сообщений об ошибках -->
+    <div id="error-message" class="alert alert-danger mt-3" style="display: none; white-space: pre-line;"></div>
+
     <!-- Отображение содержимого корзины -->
     {% if flowers %}
         <ul class="list-group">
@@ -43,9 +46,6 @@
 
     <!-- Кнопка для возврата в корзину -->
     <a href="{% url 'view_cart' %}" class="btn btn-secondary mt-2">🛒 Вернуться в корзину</a>
-
-    <!-- Блок для отображения сообщений об ошибках -->
-    <div id="error-message" class="alert alert-danger mt-3" style="display: none; white-space: pre-line;"></div>
 
     <script>
     document.getElementById("checkout-form").addEventListener("submit", function(event) {

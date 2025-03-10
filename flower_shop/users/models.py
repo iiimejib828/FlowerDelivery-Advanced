@@ -62,8 +62,3 @@ class NotificationLog(models.Model):
     def __str__(self):
         return f"Уведомление - {self.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
 
-@admin.register(NotificationLog)
-class NotificationLogAdmin(admin.ModelAdmin):
-    list_display = ("user", "created_at", "message")
-    search_fields = ("user__full_name", "message")
-    list_filter = ("created_at",)

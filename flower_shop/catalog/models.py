@@ -21,10 +21,3 @@ class Flower(models.Model):
             return mark_safe(f'<img src="{self.image.url}" width="50" height="50" />')
         return "Нет изображения"
     image_preview.short_description = "Превью изображения"
-
-@admin.register(Flower)
-class FlowerAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "price", "image_preview")
-    search_fields = ("name",)
-    readonly_fields = ("image_preview",)
-
