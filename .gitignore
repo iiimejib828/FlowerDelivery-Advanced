@@ -171,3 +171,4 @@ cython_debug/
 .pypirc
 flower_shop/bot/config.py
 flower_shop/db.sqlite3
+flower_shop/media/flowers/
