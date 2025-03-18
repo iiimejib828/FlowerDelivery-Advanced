@@ -147,3 +147,17 @@ SESSION_ENGINE = "django.contrib.sessions.backends.db"  # Используем БД для хран
 SESSION_COOKIE_AGE = 86400  # 1 день
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Сессия не удаляется при закрытии браузера
 SESSION_SAVE_EVERY_REQUEST = True  # Обновление сессии при каждом запросе
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+}

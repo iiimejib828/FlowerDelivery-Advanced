@@ -5,7 +5,6 @@ from catalog.models import Flower
 from orders.models import Order
 from users.models import UserProfile
 from bot.utils import send_message
-from bot.config import ADMIN_IDS
 from cart.views import add_to_cart, view_cart, remove_from_cart, update_cart
 
 def flower_list(request):

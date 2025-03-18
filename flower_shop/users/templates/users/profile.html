@@ -18,8 +18,12 @@
         <label>ФИО:</label>
         <input type="text" name="full_name" class="form-control mb-3" value="{{ profile.full_name }}" required>
 
-        <label>Номер телефона:</label>
-        <input type="text" name="phone" class="form-control mb-3" value="{{ profile.phone }}" required>
+	<label>Номер телефона:</label>
+	<input type="text" name="phone" class="form-control mb-3" value="{{ profile.phone }}" 
+               pattern="^(\+7|8)\d{10}$" 
+	       title="Номер телефона должен быть в формате +7XXXXXXXXXX" 
+	       required
+	       oninput="validatePhone(this)">
 
         <label>Email:</label>
         <input type="email" name="email" class="form-control mb-3" value="{{ user.email }}">
@@ -37,4 +41,14 @@
         ❓ Чтобы получать уведомления о состоянии заказов в Telegram, привяжите свой Id к профилю. Для этого отправьте команду <b>/start</b> нашему <a href="https://t.me/flowershop_delivery_bot" target="_blank">боту</a> и нажмите кнопку <b>Отправить номер</b>.
     </p>
 </div>
+<script>
+function validatePhone(input) {
+    const phonePattern = /^\+7\d{10}$/;
+    if (!phonePattern.test(input.value)) {
+        input.setCustomValidity("Номер телефона должен быть в формате +7XXXXXXXXXX");
+    } else {
+        input.setCustomValidity("");
+    }
+}
+</script>
 {% endblock %}

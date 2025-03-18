@@ -1,6 +1,7 @@
 import asyncio
-from bot.config import TOKEN
-from aiogram import Bot
+#from bot.config import TOKEN
+from bot.utils import send_message
+#from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -11,7 +12,7 @@ from django.contrib.auth.views import LoginView
 from django.contrib import messages
 from .models import UserProfile
 
-bot = Bot(token=TOKEN)
+#bot = Bot(token=TOKEN)
 
 class CustomLoginView(LoginView):
     template_name = "users/login.html"  # ✅ Указываем правильный путь к шаблону
@@ -70,18 +71,14 @@ def profile(request):
         if profile.telegram_id and not telegram_id:
             if profile.telegram_id:
                 try:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(bot.send_message(profile.telegram_id, "⚠️ Ваш Telegram отвязан от аккаунта."))
+                    send_message(profile.telegram_id, "⚠️ Ваш Telegram отвязан от аккаунта.")
                 except TelegramBadRequest:
                     pass  # Игнорируем ошибку, если Telegram ID неверный
             profile.telegram_id = None
         elif telegram_id and telegram_id != profile.telegram_id:
             profile.telegram_id = telegram_id
             try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(bot.send_message(profile.telegram_id, "✅ Ваш Telegram успешно привязан!"))
+                send_message(profile.telegram_id, "✅ Ваш Telegram успешно привязан!")
             except TelegramBadRequest:
                 messages.error(request, "❌ Ошибка: указанный Telegram ID не найден.")
                 return redirect("profile")  # Остаемся на странице профиля

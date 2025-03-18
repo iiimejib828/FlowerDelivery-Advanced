@@ -63,7 +63,7 @@ class Order(models.Model):
         return (
             f"Заказ #{self.id}\n"
             f"Состав:\n{items_list}\n"
-            f"Общая стоимость: {self.total_price} руб.\n"
+            f"Общая стоимость: {self.total_price:.2f} руб.\n"
             f"Адрес доставки: {self.address or 'Не указан'}"
         )
 

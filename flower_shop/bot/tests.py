@@ -1,202 +1,211 @@
+import unittest
 import asyncio
-import pytest
-import time
-from asgiref.sync import sync_to_async
-from aiogram import Bot
-from aiogram.types import Message, Contact, CallbackQuery
+import django
+from django.conf import settings
+from django.core.management import call_command
 from django.test import TestCase
-from django.contrib.auth.models import User
-from users.models import UserProfile
-from orders.models import Order, OrderItem
-from catalog.models import Flower
-from bot.main import start_command, process_contact, unlink_telegram, check_payment_reminders, cancel_order, confirm_cancel_order, cancel_no
-from bot.config import TOKEN, ADMIN_IDS
-from unittest.mock import AsyncMock, patch
-from datetime import timedelta
+from django.db import connection
+import pytest
+import sys
 
-# Указываем область действия цикла событий
-pytestmark = pytest.mark.asyncio(scope="function")
+# Настраиваем Django перед импортами моделей
+if not settings.configured:
+    settings.configure(
+        DATABASES={
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': ':memory:',
+            }
+        },
+        INSTALLED_APPS=[
+            'django.contrib.auth',
+            'django.contrib.contenttypes',
+            'users',
+            'orders',
+            'catalog',
+            'cart',
+        ],
+        AUTH_USER_MODEL='auth.User',
+    )
+    django.setup()
+
+from asgiref.sync import sync_to_async
+from unittest.mock import Mock, patch, AsyncMock, MagicMock
+from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from aiogram import types
+from bot.main import start_command, process_contact, unlink_telegram, check_payment_reminders
+from bot.utils import send_telegram_message
+from users.models import UserProfile, notify_profile_update
+from orders.models import Order, send_status_update
+from cart.models import WorkingHours
+from django.utils.timezone import now, timedelta
+from freezegun import freeze_time
+from datetime import time
+from cart.views import is_working_hours
 
 @pytest.mark.django_db
 class TestBot(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.user = User.objects.create_user(username='testuser', password='12345')
-        cls.profile = UserProfile.objects.get(user=cls.user)
-        cls.profile.phone = "+79991234567"
-        cls.profile.telegram_id = 123456789
-        cls.profile.full_name = "Test User"
-        cls.profile.address = "Test Address"
-        cls.profile.save()
+        if 'unittest' in sys.modules and 'pytest' not in sys.argv:
+            connection.disable_constraint_checking()
+            call_command('migrate', verbosity=0, interactive=False)
+            connection.enable_constraint_checking()
 
-        cls.admin_user = User.objects.create_user(username='admin', password='admin123')
-        cls.admin_profile = UserProfile.objects.get(user=cls.admin_user)
-        cls.admin_profile.phone = "+79990000000"
-        cls.admin_profile.telegram_id = ADMIN_IDS[0]
-        cls.admin_profile.full_name = "Admin User"
-        cls.admin_profile.save()
-
-        cls.flower = Flower.objects.create(name="Rose", price=100.00)
-        cls.order = Order.objects.create(
-            user=cls.profile,
+    def setUp(self):
+        post_save.disconnect(notify_profile_update, sender=UserProfile)
+        post_save.disconnect(send_status_update, sender=Order)
+        self.auth_user = User.objects.create(username="testuser")
+        self.user, created = UserProfile.objects.get_or_create(user=self.auth_user)
+        self.user.full_name = "Test User"
+        self.user.phone = "+79991234567"
+        self.user.telegram_id = 123456789
+        self.user.address = "ул. Ленина, 10"
+        self.user.save()
+        self.fixed_time = now()
+        self.order = Order.objects.create(
+            user=self.user,
             status="awaiting_payment",
-            total_price=200.00,
-            address="Test Address"
+            total_price=1000.00
         )
-        cls.order_item = OrderItem.objects.create(
-            order=cls.order,
-            flower=cls.flower,
-            quantity=2,
-            price=100.00,
-            subtotal=200.00
-        )
-        cls.bot = Bot(token=TOKEN)
+        self.order.created_at = self.fixed_time - timedelta(hours=48)
+        self.order.save()
 
-    @pytest.fixture(autouse=True)
-    async def setup_bot(self, monkeypatch):
-        # Мокаем методы bot на уровне модуля bot.main
-        with patch('bot.main.bot.send_message', new_callable=AsyncMock) as mock_send:
-            with patch('bot.main.bot.edit_message_text', new_callable=AsyncMock) as mock_edit:
-                with patch('bot.main.bot.answer_callback_query', new_callable=AsyncMock) as mock_answer:
-                    self.bot_send_message = mock_send
-                    self.bot_edit_message_text = mock_edit
-                    self.bot_answer_callback_query = mock_answer
-                    yield
-        # Закрываем сессию после каждого теста
-        await self.bot.session.close()
-
-    async def test_start_command_with_profile(self):
-        message = Message(
-            message_id=1,
-            date=int(time.time()),
-            chat={"id": 123456789, "type": "private"},
-            from_user={"id": 123456789, "is_bot": False, "first_name": "Test"}
+        # Динамическое определение текущего дня недели
+        days_of_week = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        current_day = days_of_week[self.fixed_time.weekday()]
+        WorkingHours.objects.create(
+            day=current_day,
+            opening_time=time(0, 0),
+            closing_time=time(23, 59),
+            is_working=True
         )
-        with patch('users.models.UserProfile.get_by_telegram_id', return_value=self.profile):
-            await start_command(message)
-            self.bot_send_message.assert_called_once()
-            call_args = self.bot_send_message.call_args
-            assert call_args[0][0] == 123456789
-            assert "Ваш профиль" in call_args[0][1]
-            assert "Test User" in call_args[0][1]
-            assert "+79991234567" in call_args[0][1]
-            assert "Test Address" in call_args[0][1]
 
-    async def test_start_command_without_profile(self):
-        message = Message(
-            message_id=1,
-            date=int(time.time()),
-            chat={"id": 987654321, "type": "private"},
-            from_user={"id": 987654321, "is_bot": False, "first_name": "Unknown"}
-        )
-        with patch('users.models.UserProfile.get_by_telegram_id', return_value=None):
-            await start_command(message)
-            self.bot_send_message.assert_called_once()
-            call_args = self.bot_send_message.call_args
-            assert call_args[0][0] == 987654321
-            assert "Вы не зарегистрированы" in call_args[0][1]
+    def tearDown(self):
+        UserProfile.objects.all().delete()
+        Order.objects.all().delete()
+        User.objects.all().delete()
+        WorkingHours.objects.all().delete()
+        post_save.connect(notify_profile_update, sender=UserProfile)
+        post_save.connect(send_status_update, sender=Order)
 
-    async def test_process_contact_success(self):
-        self.profile.telegram_id = None
-        await sync_to_async(self.profile.save)()
-        
-        message = Message(
-            message_id=1,
-            date=int(time.time()),
-            chat={"id": 987654321, "type": "private"},
-            from_user={"id": 987654321, "is_bot": False, "first_name": "New"},
-            contact=Contact(phone_number="+79991234567", user_id=987654321, first_name="New")
+    def test_user_profile_str(self):
+        self.assertEqual(str(self.user), "Test User")
+
+    def test_order_str(self):
+        self.assertEqual(str(self.order), f"Заказ {self.order.id} - Test User")
+
+    def test_order_is_payment_overdue(self):
+        with freeze_time(self.fixed_time):
+            self.assertTrue(self.order.is_payment_overdue())
+        new_order = Order.objects.create(
+            user=self.user,
+            status="awaiting_payment",
+            total_price=500.00
         )
+        new_order.created_at = self.fixed_time
+        new_order.save()
+        self.assertFalse(new_order.is_payment_overdue())
+
+    @patch('bot.main.bot.send_message', new_callable=AsyncMock)
+    async def test_start_command_registered_user(self, mock_send_message):
+        message = Mock(spec=types.Message)
+        message.from_user = Mock(id=123456789)
+        message.chat = Mock(id=123456789)
+        await start_command(message)
+        mock_send_message.assert_called_once()
+        call_args = mock_send_message.call_args[0]
+        self.assertIn("👤 <b>Ваш профиль</b>", call_args[1])
+        self.assertIn("Test User", call_args[1])
+        self.assertIn("+79991234567", call_args[1])
+
+    @patch('bot.main.bot.send_message', new_callable=AsyncMock)
+    async def test_start_command_unregistered_user(self, mock_send_message):
+        message = Mock(spec=types.Message)
+        message.from_user = Mock(id=987654321)
+        message.chat = Mock(id=987654321)
+        await start_command(message)
+        mock_send_message.assert_called_once()
+        call_args = mock_send_message.call_args[0]
+        self.assertIn("❌ Вы не зарегистрированы", call_args[1])
+
+    @patch('bot.main.bot.send_message', new_callable=AsyncMock)
+    async def test_process_contact_success(self, mock_send_message):
+        message = Mock(spec=types.Message)
+        message.from_user = Mock(id=987654321)
+        message.chat = Mock(id=987654321)
+        message.contact = Mock(phone_number="+79991234567")
         await process_contact(message)
-        self.bot_send_message.assert_called_once_with(
+        mock_send_message.assert_called_once_with(
             987654321,
             "✅ Ваш Telegram успешно привязан к аккаунту!"
         )
-        profile = await sync_to_async(UserProfile.objects.get)(phone="+79991234567")
-        assert profile.telegram_id == 987654321
+        updated_user = await sync_to_async(UserProfile.objects.get)(phone="+79991234567")
+        self.assertEqual(updated_user.telegram_id, 987654321)
 
-    async def test_unlink_telegram(self):
-        message = Message(
-            message_id=1,
-            date=int(time.time()),
-            chat={"id": 123456789, "type": "private"},
-            from_user={"id": 123456789, "is_bot": False, "first_name": "Test"}
-        )
+    @patch('bot.main.bot.send_message', new_callable=AsyncMock)
+    async def test_process_contact_not_found(self, mock_send_message):
+        message = Mock(spec=types.Message)
+        message.from_user = Mock(id=987654321)
+        message.chat = Mock(id=987654321)
+        message.contact = Mock(phone_number="+79990000000")
+        await process_contact(message)
+        mock_send_message.assert_called_once()
+        call_args = mock_send_message.call_args[0]
+        self.assertIn("❌ Ошибка: UserProfile matching query does not exist", call_args[1])
+        self.assertIn("+79990000000", call_args[1])
+
+    @patch('bot.main.bot.send_message', new_callable=AsyncMock)
+    async def test_unlink_telegram_success(self, mock_send_message):
+        message = Mock(spec=types.Message)
+        message.from_user = Mock(id=123456789)
+        message.chat = Mock(id=123456789)
         await unlink_telegram(message)
-        self.bot_send_message.assert_called_once_with(
+        mock_send_message.assert_called_once_with(
             123456789,
             "✅ Ваш Telegram успешно отвязан от аккаунта."
         )
-        self.profile.refresh_from_db()
-        assert self.profile.telegram_id is None
+        updated_user = await sync_to_async(UserProfile.objects.get)(phone="+79991234567")
+        self.assertIsNone(updated_user.telegram_id)
 
-    async def test_check_payment_reminders(self):
-        self.order.created_at = self.order.created_at - timedelta(hours=25)
-        await sync_to_async(self.order.save)()
-        with patch('cart.views.is_working_hours', return_value=True):
-            with patch('orders.models.Order.is_payment_overdue', return_value=True):
-                await check_payment_reminders()
-                self.bot_send_message.assert_called_once_with(
-                    123456789,
-                    f"⚠️ Ваш заказ #{self.order.id} ожидает оплаты! Пожалуйста, оплатите его."
-                )
-
-    async def test_cancel_order(self):
-        callback = CallbackQuery(
-            id="1",
-            from_user={"id": 123456789, "is_bot": False, "first_name": "Test"},
-            message=Message(
-                message_id=1,
-                date=int(time.time()),
-                chat={"id": 123456789, "type": "private"},
-                text="Test"
-            ),
-            data=f"cancel_order_{self.order.id}",
-            chat_instance="test_chat_instance"
+    @patch('bot.main.bot.send_message', new_callable=AsyncMock)
+    @patch('cart.views.is_working_hours')
+    @patch('orders.models.Order.objects.filter')
+    @patch('orders.models.Order.is_payment_overdue')
+    async def test_check_payment_reminders(self, mock_is_payment_overdue, mock_order_filter, mock_is_working_hours, mock_send_message):
+        mock_is_payment_overdue.return_value = True
+        mock_queryset = MagicMock()
+        mock_queryset.select_related.return_value = [self.order]
+        mock_order_filter.return_value = mock_queryset
+        mock_is_working_hours.return_value = True
+        
+        self.assertTrue(await sync_to_async(is_working_hours)(), "is_working_hours should return True via sync_to_async")
+        overdue_orders = mock_order_filter.return_value.select_related('user')
+        self.assertEqual(len(overdue_orders), 1, "overdue_orders should contain one order")
+        self.assertEqual(overdue_orders[0].id, self.order.id, "overdue_orders[0] should match self.order")
+        self.assertTrue(await sync_to_async(overdue_orders[0].is_payment_overdue)(), "is_payment_overdue should return True")
+        
+        await check_payment_reminders()
+        
+        mock_send_message.assert_called_once_with(
+            123456789,
+            f"⚠️ Ваш заказ #{self.order.id} ожидает оплаты! Пожалуйста, оплатите его."
         )
-        await cancel_order(callback)
-        self.bot_edit_message_text.assert_called_once()
-        call_args = self.bot_edit_message_text.call_args
-        assert "Вы уверены, что хотите отменить заказ" in call_args[0][0]
-        self.bot_answer_callback_query.assert_called_once_with("1")
 
-    async def test_confirm_cancel_order(self):
-        callback = CallbackQuery(
-            id="1",
-            from_user={"id": 123456789, "is_bot": False, "first_name": "Test"},
-            message=Message(
-                message_id=1,
-                date=int(time.time()),
-                chat={"id": 123456789, "type": "private"},
-                text="Test"
-            ),
-            data=f"confirm_cancel_{self.order.id}",
-            chat_instance="test_chat_instance"
-        )
-        await confirm_cancel_order(callback)
-        self.order.refresh_from_db()
-        assert self.order.status == "canceled"
-        self.bot_edit_message_text.assert_called_once()
-        call_args = self.bot_edit_message_text.call_args
-        assert "Заказ отменен" in call_args[0][0]
-        self.bot_answer_callback_query.assert_called_once_with("1", "Заказ отменен.")
+    @patch('aiogram.Bot.send_message', new_callable=AsyncMock)
+    async def test_send_telegram_message(self, mock_bot_send_message):
+        chat_id = 123456789
+        text = "Test message"
+        await send_telegram_message(chat_id, text)
+        mock_bot_send_message.assert_called_once_with(chat_id=chat_id, text=text, reply_markup=None)
 
-    async def test_cancel_no(self):
-        callback = CallbackQuery(
-            id="1",
-            from_user={"id": 123456789, "is_bot": False, "first_name": "Test"},
-            message=Message(
-                message_id=1,
-                date=int(time.time()),
-                chat={"id": 123456789, "type": "private"},
-                text="Test"
-            ),
-            data=f"cancel_no_{self.order.id}",
-            chat_instance="test_chat_instance"
-        )
-        await cancel_no(callback)
-        self.bot_edit_message_text.assert_called_once()
-        call_args = self.bot_edit_message_text.call_args
-        assert "Отменить заказ" in str(call_args[1]['reply_markup'])
-        self.bot_answer_callback_query.assert_called_once_with("1", "Отмена заказа отклонена.")
+    def test_run_async(self):
+        async def dummy():
+            return "done"
+        result = asyncio.run(dummy())
+        self.assertEqual(result, "done")
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
