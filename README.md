@@ -40,16 +40,16 @@
    cd FlowerDelivery-Advanced
 2. **Создайте и активируйте виртуальное окружение**:
    ```
-   python -m venv venv source venv/bin/activate  # Linux/Mac
+   python -m venv venv 
+   source venv/bin/activate  # Linux/Mac
    venv\Scripts\activate     # Windows
 3. **Установите зависимости**:
    ```
    pip install -r requirements.txt
-4. **Настройте переменные окружения: Создайте файл .env в корневой директории и добавьте**:
+4. **Настройте работу с телеграм: Создайте файл bot/config.py и добавьте**:
    ```
-   SECRET_KEY=your_django_secret_key
-   DEBUG=True
-   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+   TOKEN = 'YOUR BOT TOKEN'
+   ADMIN_IDS = [123456789]  # Укажите Tekegram ID администраторов
 5. **Примените миграции**:
    ```
    python manage.py migrate
