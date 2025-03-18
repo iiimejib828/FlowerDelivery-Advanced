@@ -125,7 +125,7 @@ import os
 
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, "core/static"),  # ? Убедитесь, что папка `static/` подключена
+    os.path.join(BASE_DIR, "core/static"),  # ? РЈР±РµРґРёС‚РµСЃСЊ, С‡С‚Рѕ РїР°РїРєР° `static/` РїРѕРґРєР»СЋС‡РµРЅР°
 ]
 
 # Default primary key field type
@@ -133,20 +133,19 @@ STATICFILES_DIRS = [
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Указываем, что Django должен использовать /login/ вместо /accounts/login/
+# РЈРєР°Р·С‹РІР°РµРј, С‡С‚Рѕ Django РґРѕР»Р¶РµРЅ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ /login/ РІРјРµСЃС‚Рѕ /accounts/login/
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
 
-# РќР°СЃС‚СЂРѕР№РєРё РјРµРґРёР°С„Р°Р№Р»РѕРІ
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-# Гарантируем, что сессия пользователя сохраняется после логина
-SESSION_ENGINE = "django.contrib.sessions.backends.db"  # Используем БД для хранения сессий
-SESSION_COOKIE_AGE = 86400  # 1 день
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Сессия не удаляется при закрытии браузера
-SESSION_SAVE_EVERY_REQUEST = True  # Обновление сессии при каждом запросе
+# Р“Р°СЂР°РЅС‚РёСЂСѓРµРј, С‡С‚Рѕ СЃРµСЃСЃРёСЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ РїРѕСЃР»Рµ Р»РѕРіРёРЅР°
+SESSION_ENGINE = "django.contrib.sessions.backends.db"  # РСЃРїРѕР»СЊР·СѓРµРј Р‘Р” РґР»СЏ С…СЂР°РЅРµРЅРёСЏ СЃРµСЃСЃРёР№
+SESSION_COOKIE_AGE = 86400  # 1 РґРµРЅСЊ
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # РЎРµСЃСЃРёСЏ РЅРµ СѓРґР°Р»СЏРµС‚СЃСЏ РїСЂРё Р·Р°РєСЂС‹С‚РёРё Р±СЂР°СѓР·РµСЂР°
+SESSION_SAVE_EVERY_REQUEST = True  # РћР±РЅРѕРІР»РµРЅРёРµ СЃРµСЃСЃРёРё РїСЂРё РєР°Р¶РґРѕРј Р·Р°РїСЂРѕСЃРµ
 
 LOGGING = {
     'version': 1,
