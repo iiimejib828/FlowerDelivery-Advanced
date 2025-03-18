@@ -1,6 +1,6 @@
 # FlowerDelivery-Advanced
 
-![Flower Shop](flower_shop/static/images/Flowershop.webp)
+![Flower Shop](flower_shop/core/static/images/Flowershop.webp)
 
 **FlowerDelivery-Advanced** — это веб-приложение на Django для управления цветочным магазином с функциями каталога, корзины, заказов и интеграцией с Telegram-ботом для уведомлений. Проект предоставляет удобный интерфейс для пользователей, администраторов и включает тестирование функциональности.
 
